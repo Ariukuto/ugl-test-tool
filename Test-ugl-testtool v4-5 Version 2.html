@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+		<meta http-equiv="content-type" content="text/html; charset=utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title> UGL-Test V4-5 </title>
+		<link href="https://unpkg.com/tabulator-tables@5.4.3/dist/css/tabulator.min.css" rel="stylesheet">
+		<style>
+
+				body {
+						background-color: #343434;
+						font-family: Arial, Helvetica, sans-serif;
+				}   
+
+				* {
+						box-sizing: border-box;
+				}
+
+				input {
+						color: white;
+				}
+
+				#kopfdaten {
+						display:flex; 
+						align-items: center; 
+						flex-wrap: wrap; 
+						justify-content: flex-start; 
+						align-items: stretch; 
+						margin-bottom: 15px;
+				}
+
+				.row {
+						display: flex;
+						justify-content: flex-start; 
+						align-items: stretch;
+				}
+
+				.row .feld:first-child {
+						width: 69px;
+				}
+
+				.feld {
+						display: flex;
+						flex-direction: column;
+						border: 1px solid grey;
+						text-align: center;
+						align-items: stretch;
+						flex-grow: 1;
+						white-space: nowrap;
+						background-color: white;
+				}
+
+				.feldlabel {
+						font-weight: bold;
+						text-decoration:  underline;
+						padding: 2px;
+						background-color: lightblue;
+				}
+
+				.feldvalue {
+						display: block;
+						padding: 2px;
+						min-height: 23px;
+				}
+
+				.tableContainer {
+						margin-bottom: 25px;
+						height: 670px;
+						overflow: auto;
+						width: 100%;
+				}
+
+				table {
+						border-collapse: collapse; /* make the table borders collapse to each other */
+						width: 100%;
+						background-color: white;
+				}
+
+				tr th {
+						white-space: nowrap;
+						background-color: lightblue;
+						position: sticky;
+						top: 0;
+						padding: 15px;
+						height: 53px;
+						text-align: center;
+				}
+
+				tr.pot-header th {
+					top: 53px;
+				}
+
+				tr.poz-header th {
+					top: calc(53px + 53px);
+				}
+
+				tr:hover {
+						background-color: yellow;
+						transition: all 0.5s;
+				}
+		</style>
+</head>
+<body>
+		
+		<input type="file" name="file" id="file" /> <br><br>
+
+		<!-- kofpdaten -->
+		<div id="kopfdaten"></div>
+		
+		<!-- Adressdaten -->
+		<div style="display:flex; align-items: center; flex-wrap: wrap; justify-content: flex-start; margin-bottom: 15px;" id="adressdaten"></div>
+
+		<!-- Positionsdaten -->
+		<div class="tableContainer">
+				<table border="1" id="positionsdaten"></table>
+		</div>
+
+		<!-- End -->
+		<div style="display:flex; align-items: center; flex-wrap: wrap; justify-content: flex-start; align-items: stretch;" id="endfelder"></div>
+
+		<script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.4.3/dist/js/tabulator.min.js"></script>
+
+		<!-- Class UGL Tool -->
+		<script>
+				class uglTool {
+						kopfdatenElement = null;
+						positionsdatenElement = null;
+						kopfdatenfelder = null;
+						adressdatenfelder = null;
+						positionsdatenfelder = null;;
+						pozFelder = null;
+						potFelder = null;
+						endFelder = null;
+						anfrageArten = null;
+						file = null;
+						lines = null;
+						reader = null;
+
+						constructor({encoding, kopfdatenfelder, adressdatenfelder, positionsdatenfelder, pozFelder, potFelder, endFelder, anfrageArten}) {
+								this.kopfdatenElement = document.querySelector("#kopfdaten");
+								this.positionsdatenElement = document.querySelector("#positionsdaten");
+								this.kopfdatenfelder = kopfdatenfelder;
+								this.adressdatenfelder = adressdatenfelder;
+								this.positionsdatenfelder = positionsdatenfelder;
+								this.pozFelder = pozFelder;
+								this.potFelder = potFelder;
+								this.endFelder = endFelder;
+								this.anfrageArten = anfrageArten;
+								this.reader = new FileReader();
+
+								document.getElementById('file').addEventListener("change", ({target}) =>{
+									this.file = target.files[0];
+									this.reader.readAsText(this.file, 'CP437');
+									console.log("file", this.file);
+									this.reader.onload = ({currentTarget}) => {
+										this.lines = currentTarget.result.split(/\r\n|\n/);
+										this.init(target)
+									};
+								});
+						}
+
+						init = () => {           
+								this.clear("kopfdaten");
+								this.createTableHead();								
+
+								var von = this.kopfdatenfelder[0].von;
+								this.lines.forEach((row, i) => {
+
+									let satzArt = this.getSatzart(row);
+
+										if(satzArt === "KOP") {
+												// Create Kopfdaten
+												this.kopfdatenfelder.forEach(({label, bis}) => {
+														this.createFelder(row, label, von, bis, "kopfdaten");
+														von = bis;
+												});
+												von = 0;
+										}
+
+										if(satzArt === "ADR") {
+												// Create adressdaten
+												von = this.adressdatenfelder[0].von;
+												this.adressdatenfelder.forEach(({label, bis}) => {
+														this.createFelder(row, label, von, bis, "adressdaten");
+														von = bis;
+												});
+												von = 0;
+										}
+
+										if(satzArt === "POA" || satzArt === "POZ" || satzArt === "POT") {
+											// Create Positionsdaten 
+											this.createTableRow(row);
+										}
+
+										if(satzArt === "END") {
+											// Create Zusatztext
+											console.log(row);
+											this.endFelder.forEach(({label, bis}) => {
+												this.createFelder(row, label, von, bis, "endfelder");
+													von = bis;
+											});
+											von = 0;
+										}
+								});
+						}
+
+						clear = (htmlElementID) => {
+							document.querySelector(`#${htmlElementID}`).innerHTML = "";
+						}
+
+						createFelder = (line, title, von, bis, id) => {
+							var parent = document.querySelector(`#${id}`);
+							var container = document.createElement("div");
+							container.className = "feld";
+							var label = document.createElement("label");
+							label.innerText = title;
+							label.className = "feldlabel";
+
+							var value = line.slice(von, bis);
+							Object.keys(this.anfrageArten).forEach((kuerzel) => {
+									if(kuerzel === value)
+											value = `${kuerzel}: ${anfrageArten[value]}`;
+							});
+
+							var span = document.createElement("span");
+							span.innerText = value;
+							span.className = "feldvalue";
+							container.appendChild(label);
+							container.appendChild(span);
+							parent.appendChild(container);
+						}
+
+						getSatzart = (row) => {
+								return row.slice(0, 3);
+						}
+
+						createTableRow = (row) => {
+								var tr = document.createElement("tr");
+								var feldListe = [];
+								const satzart = this.getSatzart(row);
+								switch (satzart) {
+										case "POA":
+												feldListe = this.positionsdatenfelder;
+												break;
+										case "POZ":
+												feldListe = this.pozFelder;
+												break;
+										case "POT":
+												feldListe = this.potFelder;
+												break;
+
+										default:
+												console.error(`Die Satzart ${satzart} ist nicht bekannt`);
+												break;
+								}
+
+								this.von = 0;
+								feldListe.forEach(({label, bis}) => {
+										var td = document.createElement("td");
+										td.innerText = row.slice(this.von, bis);
+										this.von = bis;
+										tr.appendChild(td);
+								});
+								this.positionsdatenElement.appendChild(tr);
+						}
+
+						createTableHead = () => {
+							let headerRow = document.createElement("tr");
+							headerRow.className = "pos-header";
+							this.positionsdatenfelder.forEach(({label, bis}) => {
+									var th = document.createElement("th");
+									th.innerHTML = label;
+									headerRow.appendChild(th);
+							});
+							this.positionsdatenElement.appendChild(headerRow);
+
+							headerRow = document.createElement("tr");
+							headerRow.className = "pot-header";
+							this.potFelder.forEach(({label, bis}) => {
+									var th = document.createElement("th");
+									th.innerHTML = label;
+									headerRow.appendChild(th);
+							});
+							this.positionsdatenElement.appendChild(headerRow);
+
+							headerRow = document.createElement("tr");
+							headerRow.className = "poz-header";
+							this.pozFelder.forEach(({label, bis}) => {
+									var th = document.createElement("th");
+									th.innerHTML = label;
+									headerRow.appendChild(th);
+							});
+							this.positionsdatenElement.appendChild(headerRow);
+						}
+				}
+		</script>
+
+		<script>        
+
+				const kopfdatenfelder = [
+						{ label: "Satzart", bis: 3 },
+						{ label: "KundenNr (HW bei GH)", bis: 13 },
+						{ label: "LieferantenNr (GH bei HW" , bis: 23},
+						{ label: "Auftragsart", bis: 25 },
+						{ label: "KundenAuftragsnr des HW", bis: 40 },
+						{ label: "KundenauftragsText des HW", bis: 90 },
+						{ label: "Vorgangsnummer des GH", bis: 105 },
+						{ label: "Wunschlieferdatum des HW", bis: 113 },
+						{ label: "Währungskennzeichen", bis: 116 },
+						{ label: "Versionskennzeichen", bis: 121 },
+						{ label: "Name Sachbearbeiter", bis: 161 },
+						{ label: "Vorgangsdokumentendatum", bis: 169 },
+						{ label: "Besteller/Abholer des HW", bis: 209 },
+						{ label: "Lieferung KZ Komplett", bis: 210 },
+						{ label: "Kundenstamm Kommission", bis: 220 },
+				]
+
+				const adressdatenfelder = [
+						{label: "Satzart", bis: 3},
+						{label: "Name 1", bis: 33},
+						{label: "Name 2", bis: 63},
+						{label: "Name 3", bis: 93},
+						{label: "Straße", bis: 123},
+						{label: "Land", bis: 126},
+						{label: "PLZ", bis: 132},
+						{label: "GPS Koordinaten", bis: 202},
+						{label: "Format GPS", bis: 214},
+						{label: "Lieferkontakt TelefonNr", bis: 244},
+						{label: "Lieferkontakt Name", bis: 294},
+						{label: "Lieferhinweis", bis: 344},
+				];
+
+				const positionsdatenfelder = [
+						{label: "Satzart: Pos", bis: 3},
+						{label: "PositionsNR des HW", bis: 13},
+						{label: "PositionsNr des GH", bis: 23},
+						{label: "Artikelnummer", bis: 38},
+						{label: "Auftrag-/Nachfragemenge", bis: 49},
+						{label: "Artikelbezeichnung 1", bis: 89},
+						{label: "Artikelbezeichnung 2", bis: 129},
+						{label: "Einzepreis Brutto je Preiseinheit", bis: 140},
+						{label: "Preiseinheit gemäß Datanorm 4.0", bis: 141},
+						{label: "Nettopositionswert", bis: 152},
+						{label: "Rabatt 1", bis: 157},
+						{label: "Rabatt 2", bis: 162},
+						{label: "Leistungsverzeichnis-Nr", bis: 180},
+						{label: "Kennz.-position", bis: 181},
+						{label: "Positionstyp", bis: 182},
+						{label: "Kennz.-vorbehaltlich technische Klärung", bis: 183},
+						{label: "Mengeneinheit", bis: 186},
+						{label: "Preis Kennz.", bis: 187},
+						{label: "Lager Kennz.", bis: 188},
+						{label: "MwSt %", bis: 193},
+						{label: "Abschlagskennz.", bis: 194},
+				];
+
+				const pozFelder = [
+						{label: "Satzart: Poz", bis: 3},
+						{label: "PositionsNr des HW", bis: 13},
+						{label: "PositionsNr des GH", bis: 23},
+						{label: "Zuschlagstyp", bis: 25},
+						{label: "Zuschlagsbezeichnung", bis: 105},
+						{label: "Tagespreis (DEL-Notierung)", bis: 116},
+						{label: "Nettopositionswert (Zuschlagsgesamtwert)", bis: 127},
+				];
+
+				const potFelder = [
+						{label: "Satzart: Pot", bis: 3},
+						{label: "Positionsnummer des HW", bis: 13},
+						{label: "Positionsnummer des GH", bis: 23},
+						{label: "Infotext 1", bis: 36},
+						{label: "Infotext 2", bis: 103},
+						{label: "Infotext 3", bis: 143},
+						{label: "leistungsverzeichnisNr", bis: 161},
+						{label: "Kennz.-Textanfang", bis: 126},
+				];
+
+				const endFelder = [
+						{label: "Satzart", bis: 3},
+						{label: "Zusatztext 1", bis: 43},
+						{label: "Zusatztext 2", bis: 83},
+						{label: "Zusatztext 3", bis: 123},
+						{label: "Zusatztext 4", bis: 163},
+				]
+
+				const anfrageArten = {
+						TB: "Abrufauftrag des HW beim GH",
+						AN: "Anfrage des HW beim GH",
+						PA: "Preisangebot des GH zum HW",
+						BE: "Lieferauftrag des HW beim GH",
+						A0: "Abruf des HW beim GH zur Lieferung aus einem Abrufauftrag",
+						A1: "Abruf des HW beim GH zur Lieferung aus einem Angebot",
+						A2: "Erstellen eines Abrufauftrags aus einem Angebot (HW->GH)",
+						AA: "Abrufauftrag (GH->HW)",
+						OR: "Eingangsbestätigung (GH->HW)",
+						AB: "Bestellbest. des (GH zum HW)",
+						LS: "Lieferavis (GH zum HW)",
+						LF: "Lieferschein Final (GH zum HW) (nach Auslieferung)",
+				}
+
+				const ugl = new uglTool({
+					encoding: 'CP437',
+					kopfdatenfelder: kopfdatenfelder,
+					adressdatenfelder: adressdatenfelder,
+					positionsdatenfelder: positionsdatenfelder,
+					pozFelder: pozFelder,
+					potFelder: potFelder,
+					endFelder: endFelder,
+					anfrageArten: anfrageArten,
+				});
+
+		</script>
+
+</body>
+</html>
